@@ -1,0 +1,58 @@
+{
+  "name": "YOUR FULL NAME",
+  "phone": "+1 555 123 4567",
+  "email": "your.email@example.com",
+  "location": "Austin, TX",
+  "linkedin": "linkedin.com/in/yourprofile",
+  "summary": "Field Service Technician with 4+ years experience in equipment maintenance, troubleshooting, and customer service.",
+  "skills": [
+    "Troubleshooting & Diagnostics",
+    "Preventive Maintenance",
+    "Safety Compliance (OSHA)",
+    "Customer Service",
+    "GPS & Data Collection"
+  ],
+  "experience": [
+    {
+      "role": "Field Service Technician",
+      "company": "Current Company Name",
+      "dates": "2022 - Present",
+      "responsibilities": [
+        "Perform troubleshooting and repair on 50+ field devices monthly with 98% first-visit resolution",
+        "Lead preventive maintenance program reducing equipment downtime by 25%",
+        "Train and mentor 5 junior technicians on safety protocols"
+      ]
+    },
+    {
+      "role": "Junior Field Technician",
+      "company": "Previous Company Name",
+      "dates": "2020 - 2022",
+      "responsibilities": [
+        "Assisted senior technicians with installations and maintenance",
+        "Managed inventory of 200+ parts and tools",
+        "Maintained 95% customer satisfaction rating"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "Bachelor of Science in Environmental Science",
+      "institution": "State University",
+      "year": "2021"
+    }
+  ],
+  "certifications": [
+    {
+      "name": "OSHA Safety Certification",
+      "issuer": "OSHA",
+      "year": "2023"
+    }
+  ],
+  "availability": "Immediate start, open to travel up to 50%",
+  "jobPreferences": {
+    "titles": ["Field Technician", "Maintenance Technician", "Field Service Engineer"],
+    "locations": ["Austin, TX", "Remote", "Dallas, TX"],
+    "workTypes": ["full_time", "part_time"],
+    "salaryExpectation": 55000
+  }
+}
