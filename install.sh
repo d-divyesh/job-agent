@@ -1,14 +1,14 @@
 #!/bin/bash
 # ============================================================
 # JOB AGENT MASTER INSTALLER
-# Repository: https://github.com/YOUR_USERNAME/job-agent
+# Repository: https://github.com/d-divyesh/job-agent
 # Version: 2.0.0
 # ============================================================
 
 set -e
 set -o pipefail
 
-REPO_URL="https://raw.githubusercontent.com/YOUR_USERNAME/job-agent/main"
+REPO_URL="https://raw.githubusercontent.com/d-divyesh/job-agent/main"
 SCRIPT_VERSION="2.0.0"
 
 LOG_FILE="/var/log/job-agent-setup.log"
