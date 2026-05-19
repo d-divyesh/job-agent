@@ -25,6 +25,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
 BOLD='\033[1m'
 NC='\033[0m'
 
@@ -33,6 +34,7 @@ show_header() {
     echo -e "${BOLD}${CYAN}"
     echo "╔════════════════════════════════════════════════════════════════╗"
     echo "║           🤖 JOB AGENT MASTER SETUP v$SCRIPT_VERSION                ║"
+    echo "║           Autonomous 24/7 Job Application Agent               ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -51,14 +53,23 @@ show_progress_bar() {
 
 show_elapsed() {
     local elapsed=$(($(date +%s) - START_TIME))
-    printf "${YELLOW}⏱️  Time: %02d:%02d${NC}" $((elapsed/60)) $((elapsed%60))
+    local minutes=$((elapsed / 60))
+    local seconds=$((elapsed % 60))
+    printf "${YELLOW}⏱️  Time: %02d:%02d${NC}" $minutes $seconds
 }
 
 show_step() {
-    case $3 in
-        "running") echo -e "${BLUE}▶ STEP $1/$TOTAL_STEPS: $2${NC}" ;;
-        "done") echo -e "${GREEN}✅ STEP $1/$TOTAL_STEPS: $2 - COMPLETE${NC}" ;;
-        "pending") echo -e "${MAGENTA}◻ STEP $1/$TOTAL_STEPS: $2 (pending)${NC}" ;;
+    local step_num=$1
+    local step_name=$2
+    local status=$3
+    
+    CURRENT_STEP=$step_num
+    
+    case $status in
+        "running") echo -e "${BLUE}▶ STEP $step_num/$TOTAL_STEPS: $step_name${NC}" ;;
+        "done") echo -e "${GREEN}✅ STEP $step_num/$TOTAL_STEPS: $step_name - COMPLETE${NC}" ;;
+        "failed") echo -e "${RED}❌ STEP $step_num/$TOTAL_STEPS: $step_name - FAILED${NC}" ;;
+        "pending") echo -e "${MAGENTA}◻ STEP $step_num/$TOTAL_STEPS: $step_name (pending)${NC}" ;;
     esac
 }
 
@@ -119,8 +130,12 @@ update_dashboard() {
 }
 
 mark_step_done() { touch "/tmp/step_${1}_done"; CURRENT_STEP=$(($1 + 1)); update_dashboard; }
+mark_step_failed() { touch "/tmp/step_${1}_failed"; update_dashboard; sleep 3; }
+
 log() { echo "[$(date '+%H:%M:%S')] $1" | tee -a "$LOG_FILE"; update_dashboard; }
 success() { echo -e "${GREEN}✅ $1${NC}" | tee -a "$LOG_FILE"; update_dashboard; }
+error() { echo -e "${RED}❌ ERROR: $1${NC}" | tee -a "$LOG_FILE" "$ERROR_LOG"; }
+warn() { echo -e "${YELLOW}⚠️  $1${NC}" | tee -a "$LOG_FILE"; }
 
 send_telegram() {
     if [[ -n "$TELEGRAM_BOT_TOKEN" && -n "$TELEGRAM_CHAT_ID" ]]; then
@@ -129,7 +144,14 @@ send_telegram() {
     fi
 }
 
-# Main installation steps
+handle_error() {
+    error "Failed at line $1"
+    mark_step_failed $CURRENT_STEP
+    send_telegram "🚨 *JOB AGENT ERROR* 🚨%0AFailed at line $1"
+    exit 1
+}
+trap 'handle_error $LINENO' ERR
+
 check_admin() {
     update_dashboard
     log "Checking admin privileges..."
@@ -370,7 +392,7 @@ final_test() {
         success "  ✓ OpenClaw: RUNNING"
     fi
     
-    send_telegram "🎉 *JOB AGENT ONLINE!* 🎉%0A✅ Ready 24/7"
+    send_telegram "🎉 *JOB AGENT ONLINE!* 🎉%0A✅ Ready 24/7%0A%0AType /help to start"
     
     success "All tests passed!"
     mark_step_done 10
@@ -388,6 +410,8 @@ final_dashboard() {
     echo -e "${GREEN}✅ Health Checks: ACTIVE${NC}"
     echo ""
     echo -e "${BOLD}🤖 Telegram: /help, /status, /find [job]${NC}"
+    echo -e "${BOLD}📁 Profile: nano /opt/job-agent/config/profile.json${NC}"
+    echo ""
     echo -e "${BOLD}${GREEN}Your agent is working 24/7! 🔥${NC}"
 }
 
