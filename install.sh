@@ -1,10 +1,9 @@
 #!/bin/bash
 # ============================================================
-# SMART JOB AGENT INSTALLER
-# - Checks what's already installed
-# - Skips completed steps
-# - Waits for user input
-# - Resumable if interrupted
+# FIXED SMART JOB AGENT INSTALLER
+# - Properly waits for user input
+# - Shows clear prompts
+# - No automatic empty input
 # ============================================================
 
 set -e
@@ -18,17 +17,15 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Progress file to track completed steps
+# Progress file
 PROGRESS_FILE="/tmp/job-agent-progress"
 STEPS_COMPLETED=""
 
-# Load previous progress if exists
 if [[ -f "$PROGRESS_FILE" ]]; then
     STEPS_COMPLETED=$(cat "$PROGRESS_FILE")
-    echo -e "${YELLOW}📋 Previous progress detected. Resuming from where we left off...${NC}"
+    echo -e "${YELLOW}📋 Previous progress detected. Resuming...${NC}"
 fi
 
-# Function to mark a step as completed
 mark_completed() {
     if [[ ! "$STEPS_COMPLETED" == *"$1"* ]]; then
         STEPS_COMPLETED="$STEPS_COMPLETED $1"
@@ -36,13 +33,12 @@ mark_completed() {
     fi
 }
 
-# Function to check if step is already completed
 is_completed() {
     [[ "$STEPS_COMPLETED" == *"$1"* ]]
 }
 
-# Function to wait for user input
-wait_for_input() {
+# FIXED: Proper input function that waits
+get_input() {
     local prompt="$1"
     local var_name="$2"
     local input_value=""
@@ -53,226 +49,167 @@ wait_for_input() {
     echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     
+    # Use /dev/tty to ensure we're reading from the terminal
     while [[ -z "$input_value" ]]; do
-        read -p "Enter value: " input_value
+        read -p "→ " input_value </dev/tty
         if [[ -z "$input_value" ]]; then
             echo -e "${RED}❌ Input cannot be empty. Please try again.${NC}"
         fi
     done
     
     eval "$var_name='$input_value'"
-    echo -e "${GREEN}✓ Received!${NC}"
-    echo ""
+    echo -e "${GREEN}✓ Received: ${input_value:0:20}...${NC}"
 }
 
-# Check if running as root
+# Check root
 if [[ $EUID -ne 0 ]]; then
-    echo -e "${YELLOW}⚠️  This script needs admin privileges. Restarting with sudo...${NC}"
+    echo -e "${YELLOW}⚠️ Need admin privileges. Restarting with sudo...${NC}"
     exec sudo bash "$0" "$@"
 fi
 
 clear
 echo -e "${BOLD}${CYAN}"
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║           🤖 SMART JOB AGENT INSTALLER v3.0                    ║"
-echo "║           Checks completed steps - Saves time & data           ║"
+echo "║           🤖 FIXED SMART JOB AGENT INSTALLER                   ║"
+echo "║           Properly waits for your input                        ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 echo ""
 
 # ============================================================
-# STEP 1: System Update (Skip if done)
+# STEP 1-5: Quick checks (skip if already done)
 # ============================================================
+
 if ! is_completed "step1"; then
-    echo -e "${BOLD}${BLUE}▶ STEP 1/8: Updating system packages${NC}"
-    echo ""
+    echo -e "${BOLD}${BLUE}▶ STEP 1/6: System Update${NC}"
     apt update -y
-    apt upgrade -y --allow-downgrades --allow-remove-essential --allow-change-held-packages
+    apt upgrade -y -y
     mark_completed "step1"
     echo -e "${GREEN}✅ Step 1 completed${NC}"
     echo ""
 else
-    echo -e "${GREEN}✅ Step 1 already completed - skipping${NC}"
+    echo -e "${GREEN}✅ Step 1 already done - skipping${NC}"
     echo ""
 fi
 
-# ============================================================
-# STEP 2: Install Dependencies (Skip if done)
-# ============================================================
 if ! is_completed "step2"; then
-    echo -e "${BOLD}${BLUE}▶ STEP 2/8: Installing dependencies${NC}"
-    echo ""
+    echo -e "${BOLD}${BLUE}▶ STEP 2/6: Installing Dependencies${NC}"
+    apt install -y curl wget git build-essential python3 python3-pip tmux htop jq
     
-    # Check and install each package only if missing
-    PACKAGES="curl wget git build-essential software-properties-common python3 python3-pip python3-venv tmux htop jq"
-    
-    for pkg in $PACKAGES; do
-        if dpkg -l | grep -q "^ii  $pkg "; then
-            echo -e "  ✓ $pkg already installed"
-        else
-            echo -e "  📦 Installing $pkg..."
-            apt install -y "$pkg"
-        fi
-    done
-    
-    # Install Node.js 20.x if not present
     if ! command -v node &> /dev/null; then
-        echo -e "  📦 Installing Node.js 20.x..."
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
         apt install -y nodejs
-    else
-        echo -e "  ✓ Node.js already installed: $(node --version)"
     fi
     
-    # Install PM2 if not present
-    if ! command -v pm2 &> /dev/null; then
-        echo -e "  📦 Installing PM2..."
-        npm install -g pm2
-    else
-        echo -e "  ✓ PM2 already installed"
+    if ! command -v npm &> /dev/null; then
+        apt install -y npm
     fi
     
     mark_completed "step2"
     echo -e "${GREEN}✅ Step 2 completed${NC}"
     echo ""
 else
-    echo -e "${GREEN}✅ Step 2 already completed - skipping${NC}"
+    echo -e "${GREEN}✅ Step 2 already done - skipping${NC}"
     echo ""
 fi
 
-# ============================================================
-# STEP 3: Install Ollama (Skip if already installed)
-# ============================================================
 if ! is_completed "step3"; then
-    echo -e "${BOLD}${BLUE}▶ STEP 3/8: Installing Ollama (Local AI)${NC}"
-    echo ""
+    echo -e "${BOLD}${BLUE}▶ STEP 3/6: Installing Ollama${NC}"
     
     if ! command -v ollama &> /dev/null; then
-        echo -e "  📦 Installing Ollama..."
         curl -fsSL https://ollama.com/install.sh | sh
-    else
-        echo -e "  ✓ Ollama already installed: $(ollama --version)"
     fi
     
-    # Create systemd service if not exists
-    if [[ ! -f /etc/systemd/system/ollama.service ]]; then
-        cat > /etc/systemd/system/ollama.service << 'EOF'
-[Unit]
-Description=Ollama AI Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/local/bin/ollama serve
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-        systemctl daemon-reload
-    fi
-    
-    systemctl enable ollama
+    systemctl enable ollama 2>/dev/null || true
     systemctl start ollama
-    sleep 3
     
     mark_completed "step3"
     echo -e "${GREEN}✅ Step 3 completed${NC}"
     echo ""
 else
-    echo -e "${GREEN}✅ Step 3 already completed - skipping${NC}"
+    echo -e "${GREEN}✅ Step 3 already done - skipping${NC}"
     echo ""
 fi
 
-# ============================================================
-# STEP 4: Pull AI Model (Skip if already downloaded)
-# ============================================================
 if ! is_completed "step4"; then
-    echo -e "${BOLD}${BLUE}▶ STEP 4/8: Pulling AI Model${NC}"
-    echo ""
+    echo -e "${BOLD}${BLUE}▶ STEP 4/6: Pulling AI Model${NC}"
+    echo -e "${YELLOW}This takes 5-10 minutes...${NC}"
     
-    # Check if model already exists
-    if ollama list | grep -q "qwen2.5:3b"; then
-        echo -e "  ✓ AI Model already downloaded"
-    else
-        echo -e "  📥 Downloading Qwen 2.5 3B model (this takes 5-10 minutes)..."
+    if ! ollama list | grep -q "qwen2.5:3b"; then
         ollama pull qwen2.5:3b
+    else
+        echo -e "${GREEN}✓ Model already downloaded${NC}"
     fi
     
     mark_completed "step4"
     echo -e "${GREEN}✅ Step 4 completed${NC}"
     echo ""
 else
-    echo -e "${GREEN}✅ Step 4 already completed - skipping${NC}"
+    echo -e "${GREEN}✅ Step 4 already done - skipping${NC}"
     echo ""
 fi
 
-# ============================================================
-# STEP 5: Install OpenClaw (Skip if done)
-# ============================================================
 if ! is_completed "step5"; then
-    echo -e "${BOLD}${BLUE}▶ STEP 5/8: Installing OpenClaw${NC}"
-    echo ""
+    echo -e "${BOLD}${BLUE}▶ STEP 5/6: Installing OpenClaw${NC}"
     
     if ! command -v openclaw &> /dev/null; then
-        echo -e "  📦 Installing OpenClaw..."
         npm install -g openclaw
-    else
-        echo -e "  ✓ OpenClaw already installed"
     fi
     
     mark_completed "step5"
     echo -e "${GREEN}✅ Step 5 completed${NC}"
     echo ""
 else
-    echo -e "${GREEN}✅ Step 5 already completed - skipping${NC}"
+    echo -e "${GREEN}✅ Step 5 already done - skipping${NC}"
     echo ""
 fi
 
 # ============================================================
-# STEP 6: Telegram Setup (ALWAYS requires input - can't skip)
+# STEP 6: Telegram Setup (WAITS FOR INPUT)
 # ============================================================
-echo -e "${BOLD}${BLUE}▶ STEP 6/8: Telegram Bot Setup${NC}"
+
+echo -e "${BOLD}${BLUE}▶ STEP 6/6: Telegram Bot Setup${NC}"
 echo ""
 
-# Check if credentials already exist
+# Show instructions
+echo -e "${CYAN}════════════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}📱 QUICK GUIDE TO GET YOUR TELEGRAM CREDENTIALS:${NC}"
+echo -e "${CYAN}════════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "${YELLOW}1. Get Bot Token from @BotFather:${NC}"
+echo "   • Open Telegram → Search '@BotFather'"
+echo "   • Send: /newbot"
+echo "   • Name: My Job Agent"
+echo "   • Username: myjobagent_bot"
+echo "   • Copy the token (looks like: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)"
+echo ""
+echo -e "${YELLOW}2. Get Chat ID from @userinfobot:${NC}"
+echo "   • Search '@userinfobot' on Telegram"
+echo "   • Send any message (like 'hi')"
+echo "   • Copy your Chat ID (a number like: 123456789)"
+echo ""
+echo -e "${CYAN}════════════════════════════════════════════════════════════════${NC}"
+echo ""
+
+# Check if we already have credentials
 if [[ -f /root/.openclaw/telegram-creds ]] && ! is_completed "step6"; then
     echo -e "${YELLOW}⚠️  Previous Telegram credentials found.${NC}"
-    echo -e "${YELLOW}   Do you want to reuse them or enter new ones?${NC}"
     echo ""
-    echo "   [1] Reuse existing credentials"
+    echo "   [1] Use existing credentials"
     echo "   [2] Enter new credentials"
     echo ""
-    read -p "Choose (1 or 2): " reuse_choice
+    read -p "Choose (1 or 2): " reuse_choice </dev/tty
     
     if [[ "$reuse_choice" == "1" ]]; then
         source /root/.openclaw/telegram-creds
         echo -e "${GREEN}✓ Using existing credentials${NC}"
     else
-        wait_for_input "Paste your Telegram Bot Token (from @BotFather)" "TELEGRAM_BOT_TOKEN"
-        wait_for_input "Paste your Chat ID (from @userinfobot)" "TELEGRAM_CHAT_ID"
+        get_input "Paste your Telegram Bot Token" "TELEGRAM_BOT_TOKEN"
+        get_input "Paste your Chat ID" "TELEGRAM_CHAT_ID"
     fi
 else
-    # Show instructions
-    echo -e "${CYAN}📱 TELEGRAM SETUP INSTRUCTIONS:${NC}"
-    echo ""
-    echo "   Step A: Create a Bot"
-    echo "     1. Open Telegram → Search @BotFather"
-    echo "     2. Send: /newbot"
-    echo "     3. Name it: My Job Agent"
-    echo "     4. Username: myjobagent_bot"
-    echo "     5. COPY THE TOKEN"
-    echo ""
-    echo "   Step B: Get Your Chat ID"
-    echo "     1. Search @userinfobot on Telegram"
-    echo "     2. Send any message"
-    echo "     3. COPY YOUR CHAT ID"
-    echo ""
-    
-    wait_for_input "Paste your Telegram Bot Token" "TELEGRAM_BOT_TOKEN"
-    wait_for_input "Paste your Chat ID" "TELEGRAM_CHAT_ID"
+    get_input "Paste your Telegram Bot Token (from @BotFather)" "TELEGRAM_BOT_TOKEN"
+    get_input "Paste your Chat ID (from @userinfobot)" "TELEGRAM_CHAT_ID"
 fi
 
 # Save credentials
@@ -283,32 +220,23 @@ TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID"
 EOF
 
 # Test connection
+echo ""
 echo -e "${CYAN}📡 Testing Telegram connection...${NC}"
 TEST_RESULT=$(curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-    -d "chat_id=$TELEGRAM_CHAT_ID&text=✅ Smart Job Agent installation in progress!" \
+    -d "chat_id=$TELEGRAM_CHAT_ID&text=✅ Smart Job Agent is being installed!" \
     -o /dev/null -w "%{http_code}")
 
 if [[ "$TEST_RESULT" == "200" ]]; then
     echo -e "${GREEN}✅ Telegram connection successful!${NC}"
 else
-    echo -e "${RED}❌ Telegram connection failed. Please check your token and chat ID.${NC}"
+    echo -e "${RED}❌ Telegram connection failed (HTTP $TEST_RESULT)${NC}"
+    echo -e "${YELLOW}Please check your token and chat ID, then run the script again.${NC}"
     exit 1
 fi
 
-mark_completed "step6"
-echo -e "${GREEN}✅ Step 6 completed${NC}"
-echo ""
-
-# ============================================================
-# STEP 7: Configure OpenClaw (Skip if done)
-# ============================================================
-if ! is_completed "step7"; then
-    echo -e "${BOLD}${BLUE}▶ STEP 7/8: Configuring OpenClaw${NC}"
-    echo ""
-    
-    mkdir -p /root/.openclaw
-    
-    cat > /root/.openclaw/openclaw.json << EOF
+# Create OpenClaw config
+mkdir -p /root/.openclaw
+cat > /root/.openclaw/openclaw.json << EOF
 {
   "models": {
     "providers": {
@@ -337,12 +265,10 @@ if ! is_completed "step7"; then
   }
 }
 EOF
-    
-    mkdir -p /opt/job-agent/{config,templates,output/{resumes,logs}}
-    
-    # Create profile if not exists
-    if [[ ! -f /opt/job-agent/config/profile.json ]]; then
-        cat > /opt/job-agent/config/profile.json << 'EOF'
+
+# Create profile
+mkdir -p /opt/job-agent/config
+cat > /opt/job-agent/config/profile.json << 'EOF'
 {
   "name": "YOUR NAME HERE",
   "phone": "+1 555 123 4567",
@@ -355,25 +281,9 @@ EOF
   "jobPreferences": {"titles": ["Field Technician"], "locations": ["Remote"]}
 }
 EOF
-    fi
-    
-    mark_completed "step7"
-    echo -e "${GREEN}✅ Step 7 completed${NC}"
-    echo ""
-else
-    echo -e "${GREEN}✅ Step 7 already completed - skipping${NC}"
-    echo ""
-fi
 
-# ============================================================
-# STEP 8: Setup 24/7 Service (Skip if done)
-# ============================================================
-if ! is_completed "step8"; then
-    echo -e "${BOLD}${BLUE}▶ STEP 8/8: Setting up 24/7 Service${NC}"
-    echo ""
-    
-    # Create systemd service
-    cat > /etc/systemd/system/openclaw-gateway.service << EOF
+# Create systemd service
+cat > /etc/systemd/system/openclaw-gateway.service << EOF
 [Unit]
 Description=OpenClaw Job Agent
 After=network.target ollama.service
@@ -390,67 +300,43 @@ RestartSec=30
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
-    systemctl enable openclaw-gateway
-    systemctl start openclaw-gateway
-    
-    # Create health check
-    cat > /usr/local/bin/job-agent-healthcheck.sh << 'EOF'
+systemctl daemon-reload
+systemctl enable openclaw-gateway
+systemctl start openclaw-gateway
+
+# Health check
+cat > /usr/local/bin/job-agent-healthcheck.sh << 'EOF'
 #!/bin/bash
 if ! systemctl is-active --quiet openclaw-gateway; then
     systemctl restart openclaw-gateway
 fi
 EOF
-    chmod +x /usr/local/bin/job-agent-healthcheck.sh
-    
-    # Add to crontab
-    (crontab -l 2>/dev/null | grep -v "job-agent-healthcheck"; echo "* * * * * /usr/local/bin/job-agent-healthcheck.sh") | crontab -
-    
-    mark_completed "step8"
-    echo -e "${GREEN}✅ Step 8 completed${NC}"
-    echo ""
-else
-    echo -e "${GREEN}✅ Step 8 already completed - skipping${NC}"
-    echo ""
-fi
+chmod +x /usr/local/bin/job-agent-healthcheck.sh
+(crontab -l 2>/dev/null | grep -v "job-agent-healthcheck"; echo "* * * * * /usr/local/bin/job-agent-healthcheck.sh") | crontab -
 
-# ============================================================
-# FINAL: Send success message and show dashboard
-# ============================================================
-send_telegram() {
-    curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-        -d "chat_id=$TELEGRAM_CHAT_ID&text=$1" > /dev/null 2>&1
-}
+mark_completed "step6"
 
-send_telegram "🎉 *SMART JOB AGENT IS ONLINE!* 🎉%0A%0A✅ All steps completed%0A✅ Your 24/7 job application agent is ready%0A%0A📱 Try these commands:%0A/help - Show all commands%0A/status - Check agent health%0A/find field technician - Search for jobs"
+# Send success message
+curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+    -d "chat_id=$TELEGRAM_CHAT_ID&text=🎉 *JOB AGENT IS ONLINE!* 🎉%0A%0A✅ Ready 24/7%0A✅ Type /help to start" > /dev/null
 
+# Final dashboard
 clear
 echo -e "${BOLD}${GREEN}"
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║                    🎉 SETUP COMPLETE! 🎉                       ║"
-echo "║           Your Smart Job Agent is Now Operational              ║"
+echo "║           Your Job Agent is Now Operational                    ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 echo ""
-echo -e "${GREEN}✅ Ollama AI: RUNNING${NC}"
-echo -e "${GREEN}✅ OpenClaw Gateway: RUNNING${NC}"
-echo -e "${GREEN}✅ Telegram Bot: CONNECTED${NC}"
-echo -e "${GREEN}✅ Health Checks: ACTIVE${NC}"
-echo -e "${GREEN}✅ Progress Saved: $PROGRESS_FILE${NC}"
+echo -e "${GREEN}✅ Ollama: RUNNING${NC}"
+echo -e "${GREEN}✅ OpenClaw: RUNNING${NC}"
+echo -e "${GREEN}✅ Telegram: CONNECTED${NC}"
 echo ""
-echo -e "${BOLD}🤖 TELEGRAM COMMANDS TO TEST:${NC}"
-echo -e "   /help     - Show all commands"
-echo -e "   /status   - Check agent health"
-echo -e "   /find     - Search for jobs"
+echo -e "${BOLD}🤖 TEST ON TELEGRAM:${NC}"
+echo -e "   Send /help to your bot"
 echo ""
 echo -e "${BOLD}📁 EDIT YOUR PROFILE:${NC}"
 echo -e "   nano /opt/job-agent/config/profile.json"
 echo ""
-echo -e "${BOLD}🔧 MANAGE THE AGENT:${NC}"
-echo -e "   systemctl status openclaw-gateway"
-echo -e "   systemctl restart openclaw-gateway"
-echo -e "   journalctl -u openclaw-gateway -f"
-echo ""
-echo -e "${BOLD}${GREEN}Your agent is now working 24/7! 🔥${NC}"
-echo ""
-echo -e "${YELLOW}💡 Tip: If you interrupt the script, just run it again - it will resume from where it stopped!${NC}"
+echo -e "${BOLD}${GREEN}Your agent is working 24/7! 🔥${NC}"
